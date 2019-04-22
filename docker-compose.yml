@@ -1,0 +1,7 @@
+web:
+  build: .
+  command: bundle exec puma config.ru -C puma.rb
+  volumes:
+    - .:/dfa-revere
+  ports:
+    - "4567:4567"

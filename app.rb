@@ -34,23 +34,26 @@ class Revere
 end
 
 post "/:mobile_flow_id" do
+  mobile_flow_id = params[:mobile_flow_id]
   json_params = JSON.parse(request.body.read)
   msisdn = json_params["phone"].to_s.gsub(/\D/, '')
 
-  data = {
-    "msisdns" => [msisdn],
-    "mobileFlow" => params[:mobile_flow_id]
-  }
+  Thread.new do
+    data = {
+      "msisdns" => [msisdn],
+      "mobileFlow" => mobile_flow_id
+    }
 
-  # Subscribe mobile phone number to Revere & send welcome message
-  Revere.post("/messaging/sendContent", body: data.to_json)
+    # Subscribe mobile phone number to Revere & send welcome message
+    Revere.post("/messaging/sendContent", body: data.to_json)
 
-  # Sync additional metadata to Revere, if present
-  if json_params["metadata"]
-    json_params["metadata"].each do |name, value|
-      id = Revere.metadata_field_id(name) || Revere.create_metadata_field(name)
-      data = { "id" => id, "value" => value }
-      puts Revere.put("/subscriber/addMetadata/#{ msisdn }", body: data.to_json)
+    # Sync additional metadata to Revere, if present
+    if json_params["metadata"]
+      json_params["metadata"].each do |name, value|
+        id = Revere.metadata_field_id(name) || Revere.create_metadata_field(name)
+        data = { "id" => id, "value" => value }
+        Revere.put("/subscriber/addMetadata/#{ msisdn }", body: data.to_json)
+      end
     end
   end
 

@@ -33,6 +33,17 @@ class Revere
   end
 end
 
+class Actionkit
+  def self.client
+    require 'mysql2'
+    @client ||= Mysql2::Client.new(username: ENV['AK_USERNAME'], password: ENV["AK_PASSWORD"], host: ENV["AK_HOST"], database: ENV["AK_DB"])
+  end
+
+  def self.query sql
+    Actionkit.client.query sql
+  end
+end
+
 post "/:mobile_flow_id" do
   mobile_flow_id = params[:mobile_flow_id]
   json_params = JSON.parse(request.body.read)
@@ -49,6 +60,16 @@ post "/:mobile_flow_id" do
 
     # Sync additional metadata to Revere, if present
     if json_params["metadata"]
+      if json_params["metadata"]["name"]
+        json_params["metadata"]["firstname"] = json_params["metadata"]["name"].split.first
+        json_params["metadata"]["lastname"] = json_params["metadata"]["name"].split[1..-1].join(" ")
+        json_params["metadata"]["fullname"] = json_params["metadata"].delete("name")
+      end
+
+      if json_params["metadata"]["zip"]
+        json_params["metadata"]["zipcode"] = json_params["metadata"].delete("zip")
+      end
+
       json_params["metadata"].each do |name, value|
         id = Revere.metadata_field_id(name) || Revere.create_metadata_field(name)
         data = { "id" => id, "value" => value }

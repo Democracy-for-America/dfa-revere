@@ -1,6 +1,6 @@
 web:
   build: .
-  command: bundle exec puma config.ru -C puma.rb
+  command: ruby app.rb
   volumes:
     - .:/dfa-revere
   ports:

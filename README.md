@@ -17,36 +17,36 @@ Suppose you want to tag subscribers in Revere for easy targeting. In this exampl
 ```
 # Boot up a Ruby console on Heroku
 $ heroku run console --app dfa-revere
+```
 
+```ruby
 # Load the application
-> require './app.rb'
+require './app.rb'
 
 # Get a list of normalized phone numbers & first choice votes
-> results = Actionkit.query("
-    SELECT
-      m.normalized_phone,
-      f.value AS first_choice
-    FROM core_page p
-    JOIN core_action a ON p.id = a.page_id
-    JOIN core_user u ON u.id = a.user_id
-    JOIN core_phone m ON u.id = m.user_id
-    JOIN core_actionfield f ON a.id = f.parent_id AND f.name = 'first_choice'
-    WHERE
-      p.name = 'progressive_poll_april_2019' AND
-      u.email LIKE '%@democracyforamerica.com'
-    GROUP BY m.normalized_phone
-  ")
+results = Actionkit.query("
+  SELECT
+    m.normalized_phone,
+    f.value AS first_choice
+  FROM core_page p
+  JOIN core_action a ON p.id = a.page_id
+  JOIN core_user u ON u.id = a.user_id
+  JOIN core_phone m ON u.id = m.user_id
+  JOIN core_actionfield f ON a.id = f.parent_id AND f.name = 'first_choice'
+  WHERE
+    p.name = 'progressive_poll_april_2019' AND
+    u.email LIKE '%@democracyforamerica.com'
+  GROUP BY m.normalized_phone
+")
 
 # Look up the ID of the metadata field you wish to use, or create a new field if not present:
-> id = Revere.metadata_field_id("first_choice_2020") || Revere.create_metadata_field("first_choice_2020")
+id = Revere.metadata_field_id("first_choice_2020") || Revere.create_metadata_field("first_choice_2020")
 
 # Sync each first choice vote to Revere
-> results.each do |result|
-    data = { "id" => id, "value" => result['first_choice'] }
-    puts ""
-    puts result['normalized_phone']
-    puts Revere.put("/subscriber/addMetadata/#{ result['normalized_phone'] }", body: data.to_json)
-  end
+results.each do |result|
+  data = { "id" => id, "value" => result['first_choice'] }
+  puts Revere.put("/subscriber/addMetadata/#{ result['normalized_phone'] }", body: data.to_json)
+end
 ```
 
 Review the full Revere Mobile API documentation here: https://mobile-developers.reverehq.com

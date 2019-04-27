@@ -3,6 +3,10 @@ Dotenv.load
 
 require 'sinatra'
 require 'httparty'
+require 'mysql2'
+
+# Configure server
+set :bind, '0.0.0.0'
 
 class Revere
   include HTTParty
@@ -34,49 +38,84 @@ class Revere
 end
 
 class Actionkit
-  def self.client
-    require 'mysql2'
-    @client ||= Mysql2::Client.new(username: ENV['AK_USERNAME'], password: ENV["AK_PASSWORD"], host: ENV["AK_HOST"], database: ENV["AK_DB"])
-  end
+  include HTTParty
+  base_uri ENV['AK_API_PATH']
+  basic_auth ENV['AK_API_USERNAME'], ENV['AK_API_PASSWORD']
 
-  def self.query sql
-    Actionkit.client.query sql
+  def self.set_userfield user_id, name, value
+    existing_field = Actionkit.get("/rest/v1/userfield/?user=#{ user_id }&name=#{ name }").parsed_response["objects"][0]
+
+    if existing_field
+      Actionkit.put(existing_field['resource_uri'], body: {name: name, value: value})
+    else
+      Actionkit.post("/rest/v1/userfield/", body: {user: "/rest/v1/user/#{ user_id }/", name: name, value: value})
+    end
   end
 end
 
-post "/:mobile_flow_id" do
-  mobile_flow_id = params[:mobile_flow_id]
-  json_params = JSON.parse(request.body.read)
-  msisdn = json_params["phone"].to_s.gsub(/\D/, '')
+# Global variables
+set :next_phone_sql, File.read('next_phone.sql')
+set :revere_metadata_ids, {}
 
-  Thread.new do
+# Syncs a single phone number to Revere
+# Returns 0 if an unsynced phone number is available, 60 if not
+def sync_single_phone
+  client = Mysql2::Client.new({
+    username: ENV['AK_USERNAME'],
+    password: ENV["AK_PASSWORD"],
+    host: ENV["AK_HOST"],
+    database: ENV["AK_DB"]
+  })
+  query_result = client.query(settings.next_phone_sql)
+  client.close
+
+  if query_result.first.nil?
+    return 60
+  else
+    msisdn = query_result.first["msisdn"].to_s.gsub(/\D/, '')
+
     data = {
       "msisdns" => [msisdn],
-      "mobileFlow" => mobile_flow_id
+      "mobileFlow" => query_result.first["revere_mobile_flow_id"] || ENV['DEFAULT_REVERE_MOBILE_FLOW_ID']
     }
 
-    # Subscribe mobile phone number to Revere & send welcome message
     Revere.post("/messaging/sendContent", body: data.to_json)
 
-    # Sync additional metadata to Revere, if present
-    if json_params["metadata"]
-      if json_params["metadata"]["name"]
-        json_params["metadata"]["firstname"] = json_params["metadata"]["name"].split.first
-        json_params["metadata"]["lastname"] = json_params["metadata"]["name"].split[1..-1].join(" ")
-        json_params["metadata"]["fullname"] = json_params["metadata"].delete("name")
-      end
+    ["DFA ActionKit ID", "First", "Last", "email", "zipcode"].each do |field_name|
+      settings.revere_metadata_ids[field_name] ||= (Revere.metadata_field_id(field_name) || Revere.create_metadata_field(field_name))
+      data = { "id" => settings.revere_metadata_ids[field_name], "value" => query_result.first[field_name] }
+      Revere.put("/subscriber/addMetadata/#{ msisdn }", body: data.to_json)
+    end
 
-      if json_params["metadata"]["zip"]
-        json_params["metadata"]["zipcode"] = json_params["metadata"].delete("zip")
-      end
+    actionkit_id = query_result.first['DFA ActionKit ID']
+    timestamp = query_result.first['created_at'].to_s[0...19]
+    Actionkit.set_userfield actionkit_id, 'most_recent_revere_sync', timestamp
 
-      json_params["metadata"].each do |name, value|
-        id = Revere.metadata_field_id(name) || Revere.create_metadata_field(name)
-        data = { "id" => id, "value" => value }
-        Revere.put("/subscriber/addMetadata/#{ msisdn }", body: data.to_json)
-      end
+    puts "phone: #{ msisdn }, actionkit_id: #{ actionkit_id }"
+    return 0
+  end
+end
+
+if ENV['RACK_ENV'] == 'production'
+  Thread.new do
+    while true
+      sleep sync_single_phone
     end
   end
+end
 
-  "Subscribed"
+get "/" do
+  "Hello world!"
+end
+
+get "/queue" do
+  client = Mysql2::Client.new({
+    username: ENV['AK_USERNAME'],
+    password: ENV["AK_PASSWORD"],
+    host: ENV["AK_HOST"],
+    database: ENV["AK_DB"]
+  })
+  result = client.query(File.read('queue_length.sql')).first.to_s
+  client.close
+  return result
 end

@@ -28,4 +28,4 @@ EXPOSE 4567
 # The main command to run when the container starts. Also
 # tell the Rails dev server to bind to all interfaces by
 # default.
-CMD ["bundle" "exec" "puma" "config.ru" "-C" "puma.rb"]
+CMD ["ruby app.rb"]

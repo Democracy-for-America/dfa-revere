@@ -23,27 +23,42 @@ $ heroku run console --app dfa-revere
 # Load the application
 require './app.rb'
 
+# Set up a MySQL connection
+client = Mysql2::Client.new({
+  username: ENV['AK_USERNAME'],
+  password: ENV["AK_PASSWORD"],
+  host: ENV["AK_HOST"],
+  database: ENV["AK_DB"]
+})
+
 # Get a list of normalized phone numbers & first choice votes
-results = Actionkit.query("
+results = client.query("
   SELECT
-    m.normalized_phone,
-    f.value AS first_choice
-  FROM core_page p
-  JOIN core_action a ON p.id = a.page_id
-  JOIN core_user u ON u.id = a.user_id
-  JOIN core_phone m ON u.id = m.user_id
-  JOIN core_actionfield f ON a.id = f.parent_id AND f.name = 'first_choice'
-  WHERE
-    p.name = 'progressive_poll_april_2019' AND
-    u.email LIKE '%@democracyforamerica.com'
-  GROUP BY m.normalized_phone
+    x.normalized_phone,
+    x.first_choice
+  FROM
+  (
+    SELECT
+      m.normalized_phone,
+      a.id,
+      LEFT(f.value, 31) AS first_choice
+    FROM core_page p
+    JOIN core_action a ON p.id = a.page_id
+    JOIN core_user u ON u.id = a.user_id
+    JOIN core_phone m ON u.id = m.user_id
+    JOIN core_actionfield f ON a.id = f.parent_id AND f.name = 'first_choice'
+    WHERE
+      p.name IN ('progressive_poll_april_2019', 'progressive_poll_2020')
+    ORDER BY m.normalized_phone, a.id DESC
+  ) x
+  GROUP BY x.normalized_phone
 ")
 
 # Look up the ID of the metadata field you wish to use, or create a new field if not present:
 id = Revere.metadata_field_id("first_choice_2020") || Revere.create_metadata_field("first_choice_2020")
 
 # Sync each first choice vote to Revere
-results.each do |result|
+results.each_with_index do |result, i|
   data = { "id" => id, "value" => result['first_choice'] }
   puts Revere.put("/subscriber/addMetadata/#{ result['normalized_phone'] }", body: data.to_json)
 end

@@ -2,6 +2,7 @@ require 'dotenv'
 Dotenv.load
 
 require 'sinatra'
+require 'objspace'
 require 'httparty'
 require 'mysql2'
 
@@ -65,6 +66,7 @@ end
 set :next_phone_sql, File.read('next_phone.sql').gsub(/\n/, ' ')
 set :queue_length_sql, File.read('queue_length.sql').gsub(/\n/, ' ')
 set :revere_metadata_ids, {}
+set :recently_synced, []
 
 # Syncs a single phone number to Revere
 # Returns 0 if an unsynced phone number is available, 60 if not
@@ -73,7 +75,7 @@ def sync_single_phone
 
   if response_1.code == 200 && response_1.parsed_response.class == Array && response_1.parsed_response.length > 0
     query_result = {
-      "msisdn"                => response_1.parsed_response[0][0],
+      "msisdn"                => response_1.parsed_response[0][0].to_s.gsub(/\D/, ''),
       "revere_mobile_flow_id" => response_1.parsed_response[0][1],
       "DFA ActionKit ID"      => response_1.parsed_response[0][2],
       "First"                 => response_1.parsed_response[0][3],
@@ -85,8 +87,10 @@ def sync_single_phone
 
     response_2 = Actionkit.update_actionfield query_result["actionfield_id"], name: "sms_opt_in_synced"
 
-    if response_2.code == 204
-      msisdn = query_result["msisdn"].to_s.gsub(/\D/, '')
+    if response_2.code == 204 && !settings.recently_synced.include?(query_result["actionfield_id"])
+      settings.recently_synced << query_result["actionfield_id"]
+      settings.recently_synced.shift while ObjectSpace.memsize_of(settings.recently_synced) > 1000000
+      msisdn = query_result["msisdn"]
 
       data = {
         "msisdns" => [msisdn],

@@ -117,7 +117,7 @@ def sync_single_phone
   end
 end
 
-if ENV['RACK_ENV'] == 'production'
+if ENV['RACK_ENV'] == 'production' && Time.now.utc.to_s[0..18] < "2019-07-28 00:00:00"
   Thread.new do
     while true
       begin

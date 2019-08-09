@@ -46,9 +46,9 @@ results = client.query("
     JOIN core_action a ON p.id = a.page_id
     JOIN core_user u ON u.id = a.user_id
     JOIN core_phone m ON u.id = m.user_id
-    JOIN core_actionfield f ON a.id = f.parent_id AND f.name = 'first_choice'
+    JOIN core_actionfield f ON a.id = f.parent_id AND f.name = 'candidates_frst_choice'
     WHERE
-      p.name IN ('progressive_poll_april_2019', 'progressive_poll_2020')
+      p.name IN ('pulse-poll-july-2019')
     ORDER BY m.normalized_phone, a.id DESC
   ) x
   GROUP BY x.normalized_phone

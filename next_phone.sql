@@ -1,11 +1,11 @@
 SELECT
-  g.value AS msisdn,
-  h.value AS revere_mobile_flow_id,
-  u.id AS 'DFA ActionKit ID',
-  u.first_name AS First,
-  u.last_name AS Last,
+  g.value AS phone,
+  u.id AS actionkit_id,
+  u.first_name,
+  u.last_name,
   u.email,
-  u.zip AS zipcode,
+  u.state,
+  u.zip,
   f.id AS actionfield_id,
   a.created_at
 FROM core_user u

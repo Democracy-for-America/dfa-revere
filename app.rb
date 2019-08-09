@@ -74,41 +74,28 @@ def sync_single_phone
   response_1 = Actionkit.query(Sinatra::Application.settings.next_phone_sql)
 
   if response_1.code == 200 && response_1.parsed_response.class == Array && response_1.parsed_response.length > 0
-    query_result = {
-      "msisdn"                => response_1.parsed_response[0][0].to_s.gsub(/\D/, ''),
-      "revere_mobile_flow_id" => response_1.parsed_response[0][1],
-      "DFA ActionKit ID"      => response_1.parsed_response[0][2],
-      "First"                 => response_1.parsed_response[0][3],
-      "Last"                  => response_1.parsed_response[0][4],
-      "email"                 => response_1.parsed_response[0][5],
-      "zipcode"               => response_1.parsed_response[0][6],
-      "actionfield_id"        => response_1.parsed_response[0][7]
+    params = {
+      "token"                 => ENV['API_KEY'],
+      "group"                 => "DFA Main List",
+      "phone"                 => response_1.parsed_response[0][0].to_s.gsub(/\D/, ''),
+      "actionkit_id"          => response_1.parsed_response[0][1].to_s,
+      "firstName"             => response_1.parsed_response[0][2].to_s,
+      "lastName"              => response_1.parsed_response[0][3].to_s,
+      "email"                 => response_1.parsed_response[0][4].to_s,
+      "state"                 => response_1.parsed_response[0][5].to_s,
+      "zip"                   => response_1.parsed_response[0][6].to_s,
+      "actionfield_id"        => response_1.parsed_response[0][7].to_s
     }
 
-    response_2 = Actionkit.update_actionfield query_result["actionfield_id"], name: "sms_opt_in_synced"
+    response_2 = Actionkit.update_actionfield params["actionfield_id"], name: "sms_opt_in_synced"
 
-    if response_2.code == 204 && !settings.recently_synced.include?(query_result["actionfield_id"])
-      settings.recently_synced << query_result["actionfield_id"]
+    if response_2.code == 204 && !settings.recently_synced.include?(params["actionfield_id"])
+      settings.recently_synced << params["actionfield_id"]
       settings.recently_synced.shift while ObjectSpace.memsize_of(settings.recently_synced) > 1000000
-      msisdn = query_result["msisdn"]
-
-      data = {
-        "msisdns" => [msisdn],
-        "mobileFlow" => query_result["revere_mobile_flow_id"] || ENV['DEFAULT_REVERE_MOBILE_FLOW_ID']
-      }
-
-      Revere.post("/messaging/sendContent", body: data.to_json)
-
-      ["DFA ActionKit ID", "First", "Last", "email", "zipcode"].each do |field_name|
-        settings.revere_metadata_ids[field_name] ||= (Revere.metadata_field_id(field_name) || Revere.create_metadata_field(field_name))
-        data = { "id" => settings.revere_metadata_ids[field_name], "value" => query_result[field_name] }
-        Revere.put("/subscriber/addMetadata/#{ msisdn }", body: data.to_json)
-      end
-
-      actionkit_id = query_result['DFA ActionKit ID']
-      Actionkit.set_userfield actionkit_id, name: 'most_recent_revere_sync', value: Time.now.to_s[0...19]
-
-      puts "phone: #{ msisdn }, actionkit_id: #{ actionkit_id }"
+      params.delete "actionfield_id"
+      HTTParty.post("https://app2.simpletexting.com/v1/group/contact/add", body: params, options: { headers: { 'Content-Type' => 'application/x-www-form-urlencoded' } })
+      Actionkit.set_userfield params['actionkit_id'], name: 'most_recent_revere_sync', value: Time.now.to_s[0...19]
+      puts "phone: #{ params["phone"] }, actionkit_id: #{ params['actionkit_id'] }"
     end
 
     return 0
@@ -117,7 +104,7 @@ def sync_single_phone
   end
 end
 
-if ENV['RACK_ENV'] == 'production' && Time.now.utc.to_s[0..18] < "2019-07-28 00:00:00"
+if ENV['RACK_ENV'] == 'production'
   Thread.new do
     while true
       begin

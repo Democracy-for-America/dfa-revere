@@ -9,35 +9,6 @@ require 'mysql2'
 # Configure server
 set :bind, '0.0.0.0'
 
-class Revere
-  include HTTParty
-  base_uri 'https://mobile.reverehq.com/api/v1'
-  headers({
-    "accept" => "application/json",
-    "content-type" => "application/json",
-    "Authorization" => ENV['REVERE_API_KEY']
-  })
-
-  def self.metadata_field_id name
-    field = Revere.get("/metadata?size=-1").parsed_response["collection"].select{ |m| m["name"] == name }
-    field.size > 0 ? field[0]["id"] : nil
-  end
-
-  def self.create_metadata_field name
-    data = {
-      "eventUrl": nil,
-      "format": ".{1,100}",
-      "multiValue": false,
-      "name": name,
-      "status": "ACTIVE",
-      "type": "STRING",
-      "validValues": nil
-    }
-
-    Revere.post("/metadata", body: data.to_json).parsed_response["id"]
-  end
-end
-
 class Actionkit
   include HTTParty
   base_uri ENV['AK_API_PATH']

@@ -7,7 +7,7 @@ Dotenv.load
 
 base_url = "https://app2.simpletexting.com/v1/group/contact/"
 group = "DFA Main List"
-token = "redacted"
+token = "redacted" # view API key here: https://app2.simpletexting.com/account/api
 
 contacts = HTTParty.get("#{ base_url }list/?group=#{ group }&token=#{ token }").
   parsed_response["response"]["contacts"].

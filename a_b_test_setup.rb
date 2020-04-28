@@ -1,4 +1,4 @@
-# This script randomly assigns each SimpleTexting subscriber one of the following test_group fields
+# This script randomly assigns each SimpleTexting subscriber one of the following test_group fields:
 test_groups = ["short", "long"]
 
 require 'httparty'
@@ -9,7 +9,7 @@ base_url = "https://app2.simpletexting.com/v1/group/contact/"
 group = "DFA Main List"
 token = "redacted" # view API key here: https://app2.simpletexting.com/account/api
 
-contacts = HTTParty.get("#{ base_url }list/?group=#{ group }&token=#{ token }").
+contacts = HTTParty.get("#{ base_url }list/?group=#{ group }&token=#{ ENV['API_KEY'] }").
   parsed_response["response"]["contacts"].
   select { |contact| contact["status"] == "active" }
 
